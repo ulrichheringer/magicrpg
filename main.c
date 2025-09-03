@@ -38,20 +38,21 @@ const int MAX_MONSTER_PROJECTILES = 20;
 const float MONSTER_PROJECTILE_SPEED = 10.0;
 const float MONSTER_AGGRO_RANGE = 650.0;
 const float MONSTER_SHOOT_COOLDOWN = 1.0;
-const float MIN_MONSTER_DISTANCE =
-    500.0; // CHANGE: Minimum horizontal pixels between monster spawns
+const float MONSTER_CHECK_RADIUS = 300.0; // NEW: Radius for proximity check
+const int MAX_MONSTERS_IN_RADIUS =
+    1; // NEW: Max monsters allowed in that radius
 
 // --- World Generation Constants ---
 const float GROUND_Y = 630.0;
 const float PLATFORM_HEIGHT = 50.0;
-const int CHUNK_WIDTH = 250;
-const int MIN_SEGMENT_CHUNKS = 4;
-const int MAX_SEGMENT_CHUNKS = 10;
+const int CHUNK_WIDTH = 190;
+const int MIN_SEGMENT_CHUNKS = 3;
+const int MAX_SEGMENT_CHUNKS = 8;
 const int MIN_GAP_CHUNKS = 2;
 const int MAX_GAP_CHUNKS = 4;
-const int LANE_CONTINUITY_CHANCE = 80;
+const int LANE_CONTINUITY_CHANCE = 60;
 const int MONSTER_SPAWN_CHANCE = 50;
-const float platform_lanes[] = {500.0, 420.0, 340.0};
+const float platform_lanes[] = {500.0, 360.0, 240.0}; // FIX: Increased spacing
 const int CULLING_BUFFER = 3000;
 
 // --- Game State Management & Structures ---
@@ -148,6 +149,22 @@ void load_random_question(sqlite3 *db, MathQuestion *q) {
     q->correct_answer_idx = sqlite3_column_int(res, 5) - 1;
   }
   sqlite3_finalize(res);
+}
+
+// NEW: Helper function to check monster density
+bool is_spawn_location_valid(float cx, float cy,
+                             Monster monsters[MAX_MONSTERS]) {
+  int nearby_count = 0;
+  for (int i = 0; i < MAX_MONSTERS; i++) {
+    if (monsters[i].active) {
+      float dx = monsters[i].x - cx;
+      float dy = monsters[i].y - cy;
+      if (sqrt(dx * dx + dy * dy) < MONSTER_CHECK_RADIUS) {
+        nearby_count++;
+      }
+    }
+  }
+  return nearby_count < MAX_MONSTERS_IN_RADIUS;
 }
 
 int main(void) {
@@ -285,11 +302,7 @@ int main(void) {
       if (can_spawn_new_wave && random_int(1, 100) <= MONSTER_SPAWN_CHANCE) {
         wave_in_progress = true;
         can_spawn_new_wave = false;
-        monsters_to_spawn =
-            random_int(6, 10); // CHANGE: Increased monster count
-        last_monster_x =
-            player
-                .x; // CHANGE: Use player position as baseline for first monster
+        monsters_to_spawn = random_int(6, 10);
       }
 
       // REFACTORED: Platform & Monster Generation
@@ -311,30 +324,20 @@ int main(void) {
                 (Platform){lane_states[i].last_x, platform_lanes[i],
                            CHUNK_WIDTH, PLATFORM_HEIGHT};
             if (monsters_to_spawn > 0) {
-              // CHANGE: Check distance from last monster before spawning a new
-              // one
-              if (platforms[num_platforms].x - last_monster_x >
-                  MIN_MONSTER_DISTANCE) {
+              float candidate_x = platforms[num_platforms].x +
+                                  platforms[num_platforms].width / 2;
+              float candidate_y = platforms[num_platforms].y - MONSTER_SIZE;
+              if (is_spawn_location_valid(candidate_x, candidate_y, monsters)) {
                 for (int m = 0; m < MAX_MONSTERS; m++) {
                   if (!monsters[m].active) {
                     monsters[m].active = true;
                     monsters[m].health = MONSTER_HEALTH;
                     monsters[m].shoot_cooldown =
                         MONSTER_SHOOT_COOLDOWN + (random_int(0, 10) / 10.0);
-                    if (random_int(0, 3) > 0) {
-                      monsters[m].x = platforms[num_platforms].x +
-                                      platforms[num_platforms].width / 2 -
-                                      MONSTER_SIZE / 2;
-                      monsters[m].y = platforms[num_platforms].y - MONSTER_SIZE;
-                    } else {
-                      monsters[m].x = platforms[num_platforms].x +
-                                      platforms[num_platforms].width / 2 -
-                                      MONSTER_SIZE / 2;
-                      monsters[m].y = GROUND_Y - MONSTER_SIZE;
-                    }
+                    monsters[m].x = candidate_x - MONSTER_SIZE / 2;
+                    monsters[m].y = candidate_y;
                     active_monster_count++;
-                    last_monster_x =
-                        monsters[m].x; // Update position of the latest monster
+                    last_monster_x = monsters[m].x;
                     monsters_to_spawn--;
                     break;
                   }
@@ -353,7 +356,7 @@ int main(void) {
         door.x = last_monster_x + random_int(1200, 1800);
         door.y = GROUND_Y - DOOR_HEIGHT;
         barrier.active = true;
-        barrier.x = door.x;
+        barrier.x = DOOR_WIDTH + door.x;
       }
       for (int i = 0; i < num_platforms; i++) {
         if (platforms[i].x + platforms[i].width < camera_x - CULLING_BUFFER) {
