@@ -1,7 +1,4 @@
 {
-    files = {
-        "build/.objs/magicrpg/linux/x86_64/release/main.c.o"
-    },
     values = {
         "/usr/bin/g++",
         {
@@ -17,5 +14,8 @@
             "-lpthread",
             "-ldl"
         }
+    },
+    files = {
+        "build/.objs/magicrpg/linux/x86_64/release/main.c.o"
     }
 }

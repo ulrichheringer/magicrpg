@@ -1,4 +1,9 @@
 {
+    files = {
+        "main.c"
+    },
+    depfiles = "main.o: main.c\
+",
     values = {
         "/usr/bin/gcc",
         {
@@ -9,10 +14,5 @@
             "-DNDEBUG"
         }
     },
-    depfiles_format = "gcc",
-    depfiles = "main.o: main.c\
-",
-    files = {
-        "main.c"
-    }
+    depfiles_format = "gcc"
 }
